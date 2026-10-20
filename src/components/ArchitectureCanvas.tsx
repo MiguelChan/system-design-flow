@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type {JSX, PointerEvent as ReactPointerEvent, Ref} from 'react';
+import type {CSSProperties, JSX, PointerEvent as ReactPointerEvent, Ref} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {TFunction} from 'i18next';
 import type {Playground} from '../playground.ts';
@@ -14,19 +14,15 @@ import type {FlowNode, NodeKind} from '../simulation.ts';
 import {getScenario} from '../presets.ts';
 import type {TranslationKey} from '../i18n/es.ts';
 import {Icon} from './Icon.tsx';
+import {distanceBetween, midpoint, pinchViewport, MIN_SCALE, MAX_SCALE} from '../viewport.ts';
+import type {Point, Viewport, PinchGesture} from '../viewport.ts';
 
-interface Point {
-  x: number;
-  y: number;
-}
-interface View extends Point {
-  scale: number;
-}
 interface Drag extends Point {
   id: string | null;
   startX: number;
   startY: number;
   scale: number;
+  moved: boolean;
 }
 export interface CanvasHandle {
   addNode: (kind: NodeKind, label: string) => void;
@@ -35,6 +31,7 @@ interface CanvasProps {
   store: Playground;
   ref: Ref<CanvasHandle>;
   onHint: () => void;
+  onInspect: () => void;
 }
 
 function curve(from: FlowNode, to: FlowNode): [Point, Point, Point, Point] {
@@ -100,7 +97,15 @@ function subtitle(node: FlowNode, t: TFunction): string {
       return t('sinkSubtitle');
   }
 }
-function NodeCard({node, store}: {node: FlowNode; store: Playground}): JSX.Element {
+function NodeCard({
+  node,
+  store,
+  onInspect,
+}: {
+  node: FlowNode;
+  store: Playground;
+  onInspect: () => void;
+}): JSX.Element {
   const {t, i18n} = useTranslation();
   const state = store.simulation.states.get(node.id)!;
   const format = (value: number): string => new Intl.NumberFormat(i18n.language).format(value);
@@ -136,8 +141,10 @@ function NodeCard({node, store}: {node: FlowNode; store: Playground}): JSX.Eleme
       role="button"
       aria-label={t('configureNode', {name: node.label})}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' && event.target === event.currentTarget)
+        if (event.key === 'Enter' && event.target === event.currentTarget) {
           store.selectNode(node.id);
+          onInspect();
+        }
       }}
     >
       {node.kind !== 'source' && (
@@ -194,11 +201,14 @@ function NodeCard({node, store}: {node: FlowNode; store: Playground}): JSX.Eleme
     </article>
   );
 }
-export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Element {
+export function ArchitectureCanvas({store, ref, onHint, onInspect}: CanvasProps): JSX.Element {
   const {t} = useTranslation();
   const board = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
-  const [view, setView] = useState<View>({x: 20, y: 30, scale: 0.8});
+  const pointers = useRef(new Map<number, Point>());
+  const pinch = useRef<PinchGesture | null>(null);
+  const suppressClick = useRef(false);
+  const [view, setView] = useState<Viewport>({x: 20, y: 30, scale: 0.8});
   const [dragging, setDragging] = useState(false);
   const nodes = store.design.nodes;
   const fit = useCallback((): void => {
@@ -210,7 +220,7 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
     const height = Math.max(...nodes.map((node) => node.y)) + 170 - minY;
     const scale = Math.min(
       1.1,
-      Math.max(0.38, Math.min((bounds.width - 60) / width, (bounds.height - 95) / height)),
+      Math.max(MIN_SCALE, Math.min((bounds.width - 36) / width, (bounds.height - 72) / height)),
     );
     setView({
       scale,
@@ -234,7 +244,10 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
           return {...current, x: current.x - event.deltaX, y: current.y - event.deltaY};
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
-        const scale = Math.max(0.3, Math.min(1.8, current.scale * Math.exp(-event.deltaY * 0.005)));
+        const scale = Math.max(
+          MIN_SCALE,
+          Math.min(MAX_SCALE, current.scale * Math.exp(-event.deltaY * 0.005)),
+        );
         return {
           scale,
           x: x - ((x - current.x) * scale) / current.scale,
@@ -264,12 +277,31 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
     }),
     [store, view],
   );
+  const relativePoint = (point: Point): Point => {
+    const bounds = board.current?.getBoundingClientRect();
+    return {x: point.x - (bounds?.left ?? 0), y: point.y - (bounds?.top ?? 0)};
+  };
   const pointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (
-      event.button !== 0 ||
-      !(event.target instanceof Element) ||
-      event.target.closest('.port, .edge')
-    )
+    if (event.button !== 0) return;
+    if (!pointers.current.size) suppressClick.current = false;
+    if (event.pointerType === 'touch') {
+      pointers.current.set(event.pointerId, {x: event.clientX, y: event.clientY});
+      if (pointers.current.size === 2) {
+        const [a, b] = [...pointers.current.values()];
+        pinch.current = {
+          view,
+          center: relativePoint(midpoint(a, b)),
+          distance: distanceBetween(a, b),
+        };
+        drag.current = null;
+        suppressClick.current = true;
+        setDragging(true);
+        for (const id of pointers.current.keys()) event.currentTarget.setPointerCapture(id);
+        event.preventDefault();
+        return;
+      }
+    }
+    if (pinch.current || !(event.target instanceof Element) || event.target.closest('.port, .edge'))
       return;
     const id = event.target.closest<HTMLElement>('[data-node]')?.dataset.node;
     const node = nodes.find((node) => node.id === id);
@@ -281,24 +313,51 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
       x: node?.x ?? view.x,
       y: node?.y ?? view.y,
       scale: view.scale,
+      moved: false,
     };
     setDragging(true);
-    event.currentTarget.focus();
+    event.currentTarget.focus({preventScroll: true});
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const pointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (pointers.current.has(event.pointerId))
+      pointers.current.set(event.pointerId, {x: event.clientX, y: event.clientY});
+    if (pinch.current) {
+      const [a, b] = [...pointers.current.values()];
+      if (a && b)
+        setView(pinchViewport(pinch.current, relativePoint(midpoint(a, b)), distanceBetween(a, b)));
+      return;
+    }
     const current = drag.current;
     if (!current) return;
     const dx = event.clientX - current.startX;
     const dy = event.clientY - current.startY;
+    current.moved ||= Math.abs(dx) + Math.abs(dy) > 5;
+    if (!current.moved) return;
     if (current.id)
       store.moveNode(current.id, current.x + dx / current.scale, current.y + dy / current.scale);
     else setView((view) => ({...view, x: current.x + dx, y: current.y + dy}));
   };
-  const endDrag = (): void => {
-    if (drag.current?.id) store.save();
+  const endDrag = (event: ReactPointerEvent<HTMLDivElement>, cancelled = false): void => {
+    pointers.current.delete(event.pointerId);
+    if (pinch.current) {
+      if (!pointers.current.size) {
+        pinch.current = null;
+        setDragging(false);
+      }
+      return;
+    }
+    const current = drag.current;
+    if (current?.id) {
+      store.save();
+      if (!cancelled && !current.moved) onInspect();
+    } else if (current && !cancelled && !current.moved) store.clearSelection();
     drag.current = null;
     setDragging(false);
+  };
+  const worldStyle: CSSProperties & {'--canvas-scale': number} = {
+    transform: `translate(${view.x}px,${view.y}px) scale(${view.scale})`,
+    '--canvas-scale': view.scale,
   };
   const scenario = getScenario(store.scenarioId);
   return (
@@ -312,7 +371,9 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
           <button
             className="icon-button"
             aria-label={t('zoomOut')}
-            onClick={() => setView((view) => ({...view, scale: Math.max(0.3, view.scale - 0.1)}))}
+            onClick={() =>
+              setView((view) => ({...view, scale: Math.max(MIN_SCALE, view.scale - 0.1)}))
+            }
           >
             −
           </button>
@@ -320,7 +381,9 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
           <button
             className="icon-button"
             aria-label={t('zoomIn')}
-            onClick={() => setView((view) => ({...view, scale: Math.min(1.8, view.scale + 0.1)}))}
+            onClick={() =>
+              setView((view) => ({...view, scale: Math.min(MAX_SCALE, view.scale + 0.1)}))
+            }
           >
             +
           </button>
@@ -337,22 +400,21 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
         onPointerDown={pointerDown}
         onPointerMove={pointerMove}
         onPointerUp={endDrag}
-        onPointerCancel={endDrag}
+        onPointerCancel={(event) => endDrag(event, true)}
+        onClickCapture={(event) => {
+          if (suppressClick.current) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
         onKeyDown={(event) => {
           if (event.code === 'Space' && event.target === event.currentTarget) {
             event.preventDefault();
             store.setRunning(!store.running);
           }
-          if ((event.key === 'Delete' || event.key === 'Backspace') && store.selectedEdge) {
-            event.preventDefault();
-            store.deleteEdge();
-          }
         }}
       >
-        <div
-          className="world"
-          style={{transform: `translate(${view.x}px,${view.y}px) scale(${view.scale})`}}
-        >
+        <div className="world" style={worldStyle}>
           <svg className="edges" width="4000" height="2400" aria-label={t('connections')}>
             <defs>
               <marker
@@ -375,6 +437,7 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
                 store.selectedEdge = edge.id;
                 store.selected = null;
                 store.notify();
+                onInspect();
               };
               return (
                 <g
@@ -415,7 +478,7 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
           </svg>
           <div>
             {nodes.map((node) => (
-              <NodeCard key={node.id} node={node} store={store} />
+              <NodeCard key={node.id} node={node} store={store} onInspect={onInspect} />
             ))}
           </div>
         </div>
@@ -430,6 +493,7 @@ export function ArchitectureCanvas({store, ref, onHint}: CanvasProps): JSX.Eleme
             {t('write')}
           </span>
           <span className="drag-tip">{t('dragTip')}</span>
+          <span className="touch-tip">{t('touchTip')}</span>
         </div>
         {!store.design.edges.length && <div className="empty-hint">{t('emptyHint')}</div>}
       </div>

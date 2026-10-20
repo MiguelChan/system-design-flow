@@ -2,6 +2,10 @@ import {useCallback, useEffect, useRef, useState, useSyncExternalStore} from 're
 import type {JSX} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Playground} from './playground.ts';
+import {isEditingTarget, shouldDeleteSelection} from './keyboard.ts';
+import {useCompactLayout} from './useCompactLayout.ts';
+import {Drawer} from './components/Drawer.tsx';
+import type {DrawerSide} from './components/Drawer.tsx';
 import {NODE_NAMES, SCENARIOS, scenarioDesign} from './presets.ts';
 import {NODE_KINDS, isScenarioId, parseDesign, serializeDesign} from './persistence.ts';
 import type {BrowserStorage} from './persistence.ts';
@@ -39,6 +43,27 @@ export function App(): JSX.Element {
   const [store] = useState(() => new Playground(scenarioDesign('pressure', t), browserStorage()));
   useSyncExternalStore(store.subscribe, store.getSnapshot);
   const [modal, setModal] = useState<ModalKind | null>(null);
+  const compact = useCompactLayout();
+  const [desktopPanels, setDesktopPanels] = useState({library: true, inspector: true});
+  const [mobilePanel, setMobilePanel] = useState<DrawerSide | null>(null);
+  const libraryOpen = compact ? mobilePanel === 'library' : desktopPanels.library;
+  const inspectorOpen = compact ? mobilePanel === 'inspector' : desktopPanels.inspector;
+  const closeLibrary = useCallback((): void => {
+    setMobilePanel(null);
+    setDesktopPanels((panels) => ({...panels, library: false}));
+  }, []);
+  const closeInspector = useCallback((): void => {
+    setMobilePanel(null);
+    setDesktopPanels((panels) => ({...panels, inspector: false}));
+  }, []);
+  const inspectSelection = useCallback((): void => {
+    if (compact) setMobilePanel('inspector');
+    else setDesktopPanels((panels) => ({...panels, inspector: true}));
+  }, [compact]);
+  const togglePanel = (side: DrawerSide): void => {
+    if (compact) setMobilePanel((panel) => (panel === side ? null : side));
+    else setDesktopPanels((panels) => ({...panels, [side]: !panels[side]}));
+  };
   const canvas = useRef<CanvasHandle>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const download = useRef<{url: string; timer: ReturnType<typeof setTimeout>} | null>(null);
@@ -99,6 +124,19 @@ export function App(): JSX.Element {
     },
     [],
   );
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent): void => {
+      if (
+        shouldDeleteSelection(event, isEditingTarget(event.target), modal !== null) &&
+        (store.selected || store.selectedEdge)
+      ) {
+        event.preventDefault();
+        store.deleteSelection();
+      }
+    };
+    document.addEventListener('keydown', keydown);
+    return () => document.removeEventListener('keydown', keydown);
+  }, [store, modal]);
   const exportDesign = (): void => {
     if (download.current) {
       clearTimeout(download.current.timer);
@@ -259,47 +297,102 @@ export function App(): JSX.Element {
         </button>
       </section>
       <Metrics store={store} />
-      <main className="workspace">
-        <aside className="library">
-          <div className="panel-heading">
-            <span className="eyebrow">{t('components')}</span>
-            <span className="tiny">
-              <Icon name="plus" />
-            </span>
-          </div>
-          <p className="panel-intro">{t('componentIntro')}</p>
-          <div className="component-list">
-            {NODE_KINDS.map((kind) => (
-              <button
-                key={kind}
-                className={`library-item type-${kind}`}
-                onClick={() => canvas.current?.addNode(kind, t(NODE_NAMES[kind]))}
+      <nav className="workspace-toolbar" aria-label={t('architecture')}>
+        <button
+          className={`panel-toggle ${libraryOpen ? 'active' : ''}`}
+          aria-expanded={libraryOpen}
+          aria-controls="library-drawer"
+          onClick={() => togglePanel('library')}
+        >
+          <Icon name="plus" />
+          {t('showComponents')}
+        </button>
+        <span className="selection-summary">
+          {store.design.nodes.find((node) => node.id === store.selected)?.label ??
+            (store.selectedEdge ? t('trafficRoute') : t('selectionHelp'))}
+        </span>
+        <button
+          className="icon-button selection-delete"
+          aria-label={t('deleteSelection')}
+          title={t('deleteSelection')}
+          disabled={!store.selected && !store.selectedEdge}
+          onClick={() => store.deleteSelection()}
+        >
+          <Icon name="trash" />
+        </button>
+        <button
+          className={`panel-toggle ${inspectorOpen ? 'active' : ''}`}
+          aria-expanded={inspectorOpen}
+          aria-controls="inspector-drawer"
+          onClick={() => togglePanel('inspector')}
+        >
+          <Icon name="service" />
+          {t('showInspector')}
+        </button>
+      </nav>
+      <main
+        className={`workspace ${libraryOpen ? 'with-library' : ''} ${inspectorOpen ? 'with-inspector' : ''}`}
+      >
+        <Drawer
+          side="library"
+          title={t('components')}
+          open={libraryOpen}
+          compact={compact}
+          onClose={closeLibrary}
+        >
+          <div className="library-body">
+            <p className="panel-intro">{t('componentIntro')}</p>
+            <div className="component-list">
+              {NODE_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  className={`library-item type-${kind}`}
+                  onClick={() => {
+                    canvas.current?.addNode(kind, t(NODE_NAMES[kind]));
+                    if (compact) setMobilePanel(null);
+                  }}
+                >
+                  <span className="library-icon">
+                    <Icon name={kind} />
+                  </span>
+                  <span>
+                    <b>{t(NODE_NAMES[kind])}</b>
+                    <small>{t(DESCRIPTIONS[kind])}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="library-footer">
+              <span className="live-dot" />
+              <b>{t('localEngine')}</b>
+              <p>{t('noInfra')}</p>
+              <a
+                href="https://github.com/MiguelChan/system-design-flow"
+                target="_blank"
+                rel="noopener noreferrer"
               >
-                <span className="library-icon">
-                  <Icon name={kind} />
-                </span>
-                <span>
-                  <b>{t(NODE_NAMES[kind])}</b>
-                  <small>{t(DESCRIPTIONS[kind])}</small>
-                </span>
-              </button>
-            ))}
+                {t('github')}
+              </a>
+            </div>
           </div>
-          <div className="library-footer">
-            <span className="live-dot" />
-            <b>{t('localEngine')}</b>
-            <p>{t('noInfra')}</p>
-            <a
-              href="https://github.com/MiguelChan/system-design-flow"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t('github')}
-            </a>
-          </div>
-        </aside>
-        <ArchitectureCanvas store={store} ref={canvas} onHint={() => setModal('hint')} />
-        <Inspector store={store} />
+        </Drawer>
+        <ArchitectureCanvas
+          store={store}
+          ref={canvas}
+          onInspect={inspectSelection}
+          onHint={() => setModal('hint')}
+        />
+        <Drawer
+          side="inspector"
+          title={t(
+            store.selectedEdge ? 'connection' : store.selected ? 'configuration' : 'inspector',
+          )}
+          open={inspectorOpen}
+          compact={compact}
+          onClose={closeInspector}
+        >
+          <Inspector store={store} />
+        </Drawer>
       </main>
       <Observatory store={store} />
       <footer className="footer">

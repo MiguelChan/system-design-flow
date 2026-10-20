@@ -56,7 +56,7 @@ export const es = {
   noInfra: 'Sin servicios reales. Sin costes de infraestructura.',
   github: 'Código en GitHub ↗',
   architecture: 'Arquitectura',
-  canvasSubtitle: 'Selecciona un componente para experimentar',
+  canvasSubtitle: 'Toca un componente para configurarlo',
   zoomOut: 'Alejar',
   zoomIn: 'Acercar',
   fit: 'Ajustar arquitectura al lienzo',
@@ -238,7 +238,7 @@ export const es = {
   helpColors:
     'Verde = lectura · violeta = escritura · ámbar = backpressure. Los puntos son una muestra visual, no una cuenta exacta de requests.',
   helpKeys:
-    'Arrastra componentes o el fondo. Usa Espacio para iniciar/pausar cuando el lienzo tenga el foco; Delete elimina la conexión seleccionada.',
+    'Arrastra componentes o el fondo. Usa Espacio para iniciar/pausar desde el lienzo; Delete o Backspace elimina la selección, excepto al escribir en un campo. En móvil usa dos dedos para zoom y los botones de panel para abrir o cerrar componentes e inspector.',
   hintTitle: 'Una pista, no la solución.',
   hintCallout: 'Cambia una variable. Observa. Formula una hipótesis. Repite.',
   assumptionsTitle: 'Un modelo para razonar.',
@@ -298,6 +298,13 @@ export const es = {
   sourceOutputOnly: 'Un generador solo tiene salida.',
   missingNode: 'Una conexión apunta a un componente inexistente.',
   cycle: 'El flujo debe ir hacia delante: elimina el ciclo entre componentes.',
+  closeComponents: 'Cerrar componentes',
+  closeInspector: 'Cerrar inspector',
+  showComponents: 'Componentes',
+  showInspector: 'Inspector',
+  deleteSelection: 'Eliminar selección',
+  selectionHelp: 'Selecciona un componente o una conexión para editar o eliminar.',
+  touchTip: 'Arrastra para mover · Usa dos dedos para zoom',
 } as const;
 
 export type TranslationKey = keyof typeof es;
