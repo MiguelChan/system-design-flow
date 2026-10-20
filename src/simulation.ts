@@ -1,13 +1,8 @@
-export type NodeKind =
-  | "source"
-  | "lb"
-  | "service"
-  | "queue"
-  | "cache"
-  | "db"
-  | "sink";
-export type RequestKind = "read" | "write";
-export type Overflow = "wait" | "reject" | "drop-oldest";
+import type {Notice, ValidationIssue} from './messages.ts';
+
+export type NodeKind = 'source' | 'lb' | 'service' | 'queue' | 'cache' | 'db' | 'sink';
+export type RequestKind = 'read' | 'write';
+export type Overflow = 'wait' | 'reject' | 'drop-oldest';
 export interface Settings {
   rps: number;
   readPercent: number;
@@ -21,11 +16,11 @@ export interface Settings {
   overflow: Overflow;
   highWater: number;
   lowWater: number;
-  shaper: "none" | "token" | "leaky";
+  shaper: 'none' | 'token' | 'leaky';
   rate: number;
   burst: number;
   adaptive: boolean;
-  algorithm: "round-robin" | "least-loaded";
+  algorithm: 'round-robin' | 'least-loaded';
   maxRps: number;
   hitRate: number;
   readRps: number;
@@ -104,8 +99,8 @@ export interface Sample {
 }
 export interface LogEntry {
   time: number;
-  tone: "info" | "warn" | "error" | "good";
-  message: string;
+  tone: 'info' | 'warn' | 'error' | 'good';
+  message: Notice;
 }
 export interface Transfer {
   edge: string;
@@ -122,14 +117,14 @@ export const DEFAULTS: Settings = {
   buffer: 80,
   capacity: 160,
   prefetch: 12,
-  overflow: "wait",
+  overflow: 'wait',
   highWater: 80,
   lowWater: 40,
-  shaper: "none",
+  shaper: 'none',
   rate: 100,
   burst: 50,
   adaptive: false,
-  algorithm: "round-robin",
+  algorithm: 'round-robin',
   maxRps: 2000,
   hitRate: 80,
   readRps: 200,
@@ -147,13 +142,13 @@ export function createNode(
   config: Partial<Settings> = {},
 ): FlowNode {
   const names: Record<NodeKind, string> = {
-    source: "Clientes",
-    lb: "Application LB",
-    service: "API / Worker",
-    queue: "Message Queue",
-    cache: "Redis Cache",
-    db: "Relational DB",
-    sink: "Respuesta",
+    source: 'Clients',
+    lb: 'Application LB',
+    service: 'API / Worker',
+    queue: 'Message Queue',
+    cache: 'Redis Cache',
+    db: 'Relational DB',
+    sink: 'Response',
   };
   return {
     id,
@@ -163,12 +158,10 @@ export function createNode(
     label: label ?? names[kind],
     config: {
       ...DEFAULTS,
-      ...(kind === "lb"
-        ? { latencyMs: 0, buffer: 40, overflow: "wait" as Overflow }
-        : {}),
-      ...(kind === "cache" ? { latencyMs: 10, concurrency: 100 } : {}),
-      ...(kind === "db" ? { latencyMs: 20, concurrency: 40, buffer: 100 } : {}),
-      ...(kind === "sink" ? { latencyMs: 10, concurrency: 100 } : {}),
+      ...(kind === 'lb' ? {latencyMs: 0, buffer: 40, overflow: 'wait'} : {}),
+      ...(kind === 'cache' ? {latencyMs: 10, concurrency: 100} : {}),
+      ...(kind === 'db' ? {latencyMs: 20, concurrency: 40, buffer: 100} : {}),
+      ...(kind === 'sink' ? {latencyMs: 10, concurrency: 100} : {}),
       ...config,
     },
   };
@@ -176,45 +169,34 @@ export function createNode(
 export function cloneDesign(design: Design): Design {
   return JSON.parse(JSON.stringify(design)) as Design;
 }
-export function validateDesign(design: Design): string[] {
-  const problems: string[] = [];
+export function validateDesign(design: Design): ValidationIssue[] {
+  const problems: ValidationIssue[] = [];
   const ids = new Set(design.nodes.map((n) => n.id));
-  if (!design.nodes.some((n) => n.kind === "source"))
-    problems.push("Añade al menos un generador de tráfico.");
-  if (ids.size !== design.nodes.length)
-    problems.push("Los identificadores de componentes deben ser únicos.");
-  if (design.nodes.length > 30 || design.edges.length > 60)
-    problems.push(
-      "El laboratorio admite hasta 30 componentes y 60 conexiones.",
-    );
+  if (!design.nodes.some((n) => n.kind === 'source')) problems.push({code: 'missingSource'});
+  if (ids.size !== design.nodes.length) problems.push({code: 'uniqueIds'});
+  if (design.nodes.length > 30 || design.edges.length > 60) problems.push({code: 'designLimits'});
   for (const n of design.nodes) {
     const outgoing = design.edges.filter((e) => e.from === n.id);
-    if (n.kind !== "db" && n.kind !== "sink" && !outgoing.length)
-      problems.push(`${n.label}: falta conectar su salida.`);
-    if (n.kind !== "lb" && outgoing.length > 1)
-      problems.push(`${n.label}: usa un ALB para repartir a varias salidas.`);
-    if (n.kind === "source" && design.edges.some((e) => e.to === n.id))
-      problems.push("Un generador solo tiene salida.");
+    if (n.kind !== 'db' && n.kind !== 'sink' && !outgoing.length)
+      problems.push({code: 'missingOutput', node: n.label});
+    if (n.kind !== 'lb' && outgoing.length > 1) problems.push({code: 'needsLb', node: n.label});
+    if (n.kind === 'source' && design.edges.some((e) => e.to === n.id))
+      problems.push({code: 'sourceOutputOnly'});
   }
   for (const e of design.edges)
-    if (!ids.has(e.from) || !ids.has(e.to))
-      problems.push("Una conexión apunta a un componente inexistente.");
+    if (!ids.has(e.from) || !ids.has(e.to)) problems.push({code: 'missingNode'});
   const visited = new Set<string>();
   const visiting = new Set<string>();
   const visit = (id: string): boolean => {
     if (visiting.has(id)) return true;
     if (visited.has(id)) return false;
     visiting.add(id);
-    if (design.edges.filter((e) => e.from === id).some((e) => visit(e.to)))
-      return true;
+    if (design.edges.filter((e) => e.from === id).some((e) => visit(e.to))) return true;
     visiting.delete(id);
     visited.add(id);
     return false;
   };
-  if (design.nodes.some((n) => visit(n.id)))
-    problems.push(
-      "El flujo debe ir hacia delante: elimina el ciclo entre componentes.",
-    );
+  if (design.nodes.some((n) => visit(n.id))) problems.push({code: 'cycle'});
   return [...new Set(problems)];
 }
 export class Simulation {
@@ -240,7 +222,7 @@ export class Simulation {
   private seed = 731;
   private nextId = 1;
   private sourceFractions = new Map<string, number>();
-  private latencies: { time: number; value: number }[] = [];
+  private latencies: {time: number; value: number}[] = [];
   private nextSample = 1;
   private previous = {
     demand: 0,
@@ -269,10 +251,7 @@ export class Simulation {
         misses: 0,
         reads: 0,
         writes: 0,
-        tokens:
-          n.kind === "queue" && n.config.shaper === "token"
-            ? n.config.burst
-            : 0,
+        tokens: n.kind === 'queue' && n.config.shaper === 'token' ? n.config.burst : 0,
         readTokens: 0,
         writeTokens: 0,
         rr: 0,
@@ -282,10 +261,7 @@ export class Simulation {
         rate: 0,
         lastSent: 0,
       });
-    this.log(
-      "info",
-      "Laboratorio listo. Cada punto representa una muestra del tráfico.",
-    );
+    this.log('info', {code: 'readyLog'});
   }
   random(): number {
     this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0;
@@ -296,34 +272,32 @@ export class Simulation {
     if (!node) return;
     Object.assign(node.config, patch);
     const state = this.states.get(id)!;
-    if (patch.prefetch !== undefined)
-      state.credits = Math.min(state.credits, patch.prefetch);
-    this.log("info", `${node.label}: configuración actualizada en vivo.`);
+    if (patch.prefetch !== undefined) state.credits = Math.min(state.credits, patch.prefetch);
+    this.log('info', {code: 'updatedLog', node: node.label});
   }
   burst(multiplier = 3, seconds = 5): void {
     this.burstUntil = this.time + seconds;
     this.burstMultiplier = multiplier;
-    this.log("warn", `Ráfaga ×${multiplier} durante ${seconds} s simulados.`);
+    this.log('warn', {code: 'burstLog', multiplier, seconds});
   }
   get bursting(): boolean {
     return this.time < this.burstUntil;
   }
-  log(tone: LogEntry["tone"], message: string): void {
-    this.logs.unshift({ time: this.time, tone, message });
+  log(tone: LogEntry['tone'], message: Notice): void {
+    this.logs.unshift({time: this.time, tone, message});
     if (this.logs.length > 60) this.logs.length = 60;
   }
   private finish(
     req: Request,
-    outcome: "completed" | "rejected" | "dropped",
+    outcome: 'completed' | 'rejected' | 'dropped',
     node?: FlowNode,
   ): void {
     if (!this.pending.has(req.id)) return;
     this.pending.delete(req.id);
-    for (const owner of req.owners)
-      this.states.get(owner)?.unacked.delete(req.id);
+    for (const owner of req.owners) this.states.get(owner)?.unacked.delete(req.id);
     this.totals[outcome]++;
-    if (outcome === "completed") {
-      this.totals[req.kind === "read" ? "reads" : "writes"]++;
+    if (outcome === 'completed') {
+      this.totals[req.kind === 'read' ? 'reads' : 'writes']++;
       this.latencies.push({
         time: this.time,
         value: (this.time - req.born) * 1000,
@@ -337,20 +311,20 @@ export class Simulation {
   private offer(node: FlowNode, req: Request): boolean {
     const s = this.states.get(node.id)!;
     const c = node.config;
-    const limit = node.kind === "queue" ? c.capacity : c.buffer;
+    const limit = node.kind === 'queue' ? c.capacity : c.buffer;
     // A waiting buffer and execution slots are separate resources.
     const occupied = s.ready.length;
-    if (node.kind === "queue" && c.overflow === "wait" && s.pressure) {
+    if (node.kind === 'queue' && c.overflow === 'wait' && s.pressure) {
       s.blocked = true;
       return false;
     }
     if (occupied >= limit) {
-      if (c.overflow === "reject") {
-        this.finish(req, "rejected", node);
+      if (c.overflow === 'reject') {
+        this.finish(req, 'rejected', node);
         return true;
       }
-      if (c.overflow === "drop-oldest" && s.ready.length)
-        this.finish(s.ready.shift()!, "dropped", node);
+      if (c.overflow === 'drop-oldest' && s.ready.length)
+        this.finish(s.ready.shift()!, 'dropped', node);
       else {
         s.blocked = true;
         return false;
@@ -360,8 +334,8 @@ export class Simulation {
     s.received++;
     req.path.push(node.id);
     if (
-      node.kind === "queue" &&
-      c.overflow === "wait" &&
+      node.kind === 'queue' &&
+      c.overflow === 'wait' &&
       s.ready.length >= (c.capacity * c.highWater) / 100
     )
       s.pressure = true;
@@ -371,30 +345,22 @@ export class Simulation {
     let edges = this.design.edges.filter((e) => e.from === node.id);
     if (!edges.length) {
       this.states.get(node.id)!.sent++;
-      if (node.kind === "db" || node.kind === "sink")
-        this.finish(req, "completed", node);
-      else this.finish(req, "rejected", node);
+      if (node.kind === 'db' || node.kind === 'sink') this.finish(req, 'completed', node);
+      else this.finish(req, 'rejected', node);
       return true;
     }
     const state = this.states.get(node.id)!;
-    if (node.kind === "lb") {
-      edges = edges.filter(
-        (e) => this.design.nodes.find((n) => n.id === e.to)?.config.online,
-      );
+    if (node.kind === 'lb') {
+      edges = edges.filter((e) => this.design.nodes.find((n) => n.id === e.to)?.config.online);
       if (!edges.length) {
         state.blocked = true;
         return false;
       }
-      if (node.config.algorithm === "least-loaded")
+      if (node.config.algorithm === 'least-loaded')
         edges.sort((a, b) => {
           const sa = this.states.get(a.to)!;
           const sb = this.states.get(b.to)!;
-          return (
-            sa.ready.length +
-            sa.active.length -
-            sb.ready.length -
-            sb.active.length
-          );
+          return sa.ready.length + sa.active.length - sb.ready.length - sb.active.length;
         });
       else {
         const offset = state.rr % edges.length;
@@ -408,7 +374,7 @@ export class Simulation {
         state.rr++;
         this.edgeCounts.set(edge.id, (this.edgeCounts.get(edge.id) ?? 0) + 1);
         if (this.random() < 0.16 && this.transfers.length < 130)
-          this.transfers.push({ edge: edge.id, at: this.time, kind: req.kind });
+          this.transfers.push({edge: edge.id, at: this.time, kind: req.kind});
         return true;
       }
     }
@@ -422,12 +388,10 @@ export class Simulation {
       const s = this.states.get(n.id)!;
       const c = n.config;
       s.blocked = false;
-      if (n.kind === "queue") {
-        if (s.pressure && s.ready.length <= (c.capacity * c.lowWater) / 100)
-          s.pressure = false;
-        if (c.shaper === "token")
-          s.tokens = Math.min(c.burst, s.tokens + c.rate * dt);
-        if (c.shaper === "leaky")
+      if (n.kind === 'queue') {
+        if (s.pressure && s.ready.length <= (c.capacity * c.lowWater) / 100) s.pressure = false;
+        if (c.shaper === 'token') s.tokens = Math.min(c.burst, s.tokens + c.rate * dt);
+        if (c.shaper === 'leaky')
           s.tokens = Math.min(Math.max(1, c.rate * dt), s.tokens + c.rate * dt);
         if (c.adaptive && this.time - s.feedbackAt >= 1) {
           s.credits = s.feedbackBlocked
@@ -437,19 +401,11 @@ export class Simulation {
           s.feedbackAt = this.time;
         }
       }
-      if (n.kind === "lb")
-        s.tokens = Math.min(c.maxRps, s.tokens + c.maxRps * dt);
-      if (n.kind === "db") {
-        const readRate =
-          c.readRps * (1 + (c.replicaReads ? c.readReplicas : 0));
-        s.readTokens = Math.min(
-          Math.max(1, readRate * 0.1),
-          s.readTokens + readRate * dt,
-        );
-        s.writeTokens = Math.min(
-          Math.max(1, c.writeRps * 0.1),
-          s.writeTokens + c.writeRps * dt,
-        );
+      if (n.kind === 'lb') s.tokens = Math.min(c.maxRps, s.tokens + c.maxRps * dt);
+      if (n.kind === 'db') {
+        const readRate = c.readRps * (1 + (c.replicaReads ? c.readReplicas : 0));
+        s.readTokens = Math.min(Math.max(1, readRate * 0.1), s.readTokens + readRate * dt);
+        s.writeTokens = Math.min(Math.max(1, c.writeRps * 0.1), s.writeTokens + c.writeRps * dt);
       }
       if (!c.online) {
         s.blocked = s.ready.length + s.active.length > 0;
@@ -465,13 +421,15 @@ export class Simulation {
         const req = task.request;
         if (!task.resolved) {
           task.resolved = true;
-          if (n.kind === "cache" && req.kind === "read") {
+          if (n.kind === 'cache' && req.kind === 'read') {
             task.cacheHit = this.random() * 100 < c.hitRate;
-            task.cacheHit ? s.hits++ : s.misses++;
+            if (task.cacheHit) s.hits++;
+            else s.misses++;
           }
-          if (n.kind === "db") {
-            req.kind === "read" ? s.reads++ : s.writes++;
-            if (req.kind === "write" && !req.committed) {
+          if (n.kind === 'db') {
+            if (req.kind === 'read') s.reads++;
+            else s.writes++;
+            if (req.kind === 'write' && !req.committed) {
               req.committed = true;
               this.totals.committedWrites++;
             }
@@ -479,20 +437,16 @@ export class Simulation {
         }
         if (task.cacheHit) {
           s.sent++;
-          this.finish(req, "completed", n);
+          this.finish(req, 'completed', n);
         } else if (!this.forward(n, req)) stillActive.push(task);
       }
       s.active = stillActive;
-      if (n.kind === "source") continue;
-      if (n.kind === "queue") {
+      if (n.kind === 'source') continue;
+      if (n.kind === 'queue') {
         let attempts = 0;
         const credits = c.adaptive ? s.credits : c.prefetch;
-        while (
-          s.ready.length &&
-          s.unacked.size < credits &&
-          attempts++ < 1000
-        ) {
-          if (c.shaper !== "none" && s.tokens < 1 - 1e-8) break;
+        while (s.ready.length && s.unacked.size < credits && attempts++ < 1000) {
+          if (c.shaper !== 'none' && s.tokens < 1 - 1e-8) break;
           const req = s.ready[0];
           s.unacked.add(req.id);
           req.owners.push(n.id);
@@ -502,13 +456,12 @@ export class Simulation {
             break;
           }
           s.ready.shift();
-          if (c.shaper !== "none") s.tokens = Math.max(0, s.tokens - 1);
+          if (c.shaper !== 'none') s.tokens = Math.max(0, s.tokens - 1);
         }
-        if (s.ready.length && (s.unacked.size >= credits || s.pressure))
-          s.blocked = true;
+        if (s.ready.length && (s.unacked.size >= credits || s.pressure)) s.blocked = true;
         continue;
       }
-      if (n.kind === "lb") {
+      if (n.kind === 'lb') {
         let attempts = 0;
         while (s.ready.length && s.tokens >= 1 - 1e-8 && attempts++ < 1000) {
           if (!this.forward(n, s.ready[0])) break;
@@ -517,13 +470,12 @@ export class Simulation {
         }
         continue;
       }
-      const max = n.kind === "db" ? c.concurrency : c.replicas * c.concurrency;
+      const max = n.kind === 'db' ? c.concurrency : c.replicas * c.concurrency;
       while (s.active.length < max && s.ready.length) {
         let index = 0;
-        if (n.kind === "db") {
+        if (n.kind === 'db') {
           index = s.ready.findIndex(
-            (r) =>
-              (r.kind === "read" ? s.readTokens : s.writeTokens) >= 1 - 1e-8,
+            (r) => (r.kind === 'read' ? s.readTokens : s.writeTokens) >= 1 - 1e-8,
           );
           if (index < 0) {
             s.blocked = true;
@@ -531,10 +483,10 @@ export class Simulation {
           }
         }
         const req = s.ready.splice(index, 1)[0];
-        if (n.kind === "db")
-          req.kind === "read"
-            ? (s.readTokens = Math.max(0, s.readTokens - 1))
-            : (s.writeTokens = Math.max(0, s.writeTokens - 1));
+        if (n.kind === 'db') {
+          if (req.kind === 'read') s.readTokens = Math.max(0, s.readTokens - 1);
+          else s.writeTokens = Math.max(0, s.writeTokens - 1);
+        }
         s.active.push({
           request: req,
           remaining: Math.max(0.01, c.latencyMs / 1000),
@@ -543,14 +495,10 @@ export class Simulation {
         });
       }
     }
-    for (const source of this.design.nodes.filter(
-      (n) => n.kind === "source" && n.config.online,
-    )) {
+    for (const source of this.design.nodes.filter((n) => n.kind === 'source' && n.config.online)) {
       const s = this.states.get(source.id)!;
       const factor = this.bursting ? this.burstMultiplier : 1;
-      let fraction =
-        (this.sourceFractions.get(source.id) ?? 0) +
-        source.config.rps * factor * dt;
+      let fraction = (this.sourceFractions.get(source.id) ?? 0) + source.config.rps * factor * dt;
       let attempts = Math.min(1000, Math.floor(fraction + 1e-8));
       fraction -= attempts;
       this.sourceFractions.set(source.id, fraction);
@@ -559,8 +507,7 @@ export class Simulation {
         s.received++;
         const req: Request = {
           id: this.nextId++,
-          kind:
-            this.random() * 100 < source.config.readPercent ? "read" : "write",
+          kind: this.random() * 100 < source.config.readPercent ? 'read' : 'write',
           born: this.time,
           owners: [],
           admitted: false,
@@ -575,9 +522,8 @@ export class Simulation {
         this.pending.set(req.id, req);
         if (!this.forward(source, req)) {
           this.pending.delete(req.id);
-          source.config.respectBackpressure
-            ? this.totals.throttled++
-            : this.totals.rejected++;
+          if (source.config.respectBackpressure) this.totals.throttled++;
+          else this.totals.rejected++;
           s.blocked = true;
         } else if (this.pending.has(req.id)) {
           req.admitted = true;
@@ -597,13 +543,7 @@ export class Simulation {
         backlog: this.backlog,
         p95: this.p95,
       };
-      for (const key of [
-        "demand",
-        "admitted",
-        "completed",
-        "rejected",
-        "throttled",
-      ] as const) {
+      for (const key of ['demand', 'admitted', 'completed', 'rejected', 'throttled'] as const) {
         sample[key] = this.totals[key] - this.previous[key];
         this.previous[key] = this.totals[key];
       }
@@ -616,15 +556,13 @@ export class Simulation {
       }
       if (sample.rejected || this.totals.dropped) {
         if (Math.round(this.time) % 5 === 0)
-          this.log(
-            "error",
-            `${sample.rejected} rechazos/s · ${this.totals.dropped} descartes acumulados.`,
-          );
+          this.log('error', {
+            code: 'lossesLog',
+            rejected: sample.rejected,
+            dropped: this.totals.dropped,
+          });
       } else if (sample.throttled && Math.round(this.time) % 5 === 0)
-        this.log(
-          "warn",
-          `Backpressure: ${sample.throttled} solicitudes/s esperan en el productor.`,
-        );
+        this.log('warn', {code: 'pressureLog', value: sample.throttled});
       this.nextSample += 1;
     }
   }
@@ -633,10 +571,7 @@ export class Simulation {
     for (let i = 0; i < ticks; i++) this.step();
   }
   get backlog(): number {
-    return [...this.states.values()].reduce(
-      (sum, s) => sum + s.ready.length,
-      0,
-    );
+    return [...this.states.values()].reduce((sum, s) => sum + s.ready.length, 0);
   }
   get p95(): number {
     const values = this.latencies
@@ -649,8 +584,7 @@ export class Simulation {
   }
   get oldestAge(): number {
     let oldest = this.time;
-    for (const req of this.pending.values())
-      oldest = Math.min(oldest, req.born);
+    for (const req of this.pending.values()) oldest = Math.min(oldest, req.born);
     return this.pending.size ? this.time - oldest : 0;
   }
   get latest(): Sample {
