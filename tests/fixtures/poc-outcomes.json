@@ -1,0 +1,249 @@
+[
+  {
+    "id": "pressure",
+    "totals": {
+      "demand": 2400,
+      "admitted": 958,
+      "completed": 744,
+      "rejected": 0,
+      "dropped": 0,
+      "throttled": 1442,
+      "reads": 476,
+      "writes": 268,
+      "committedWrites": 268
+    },
+    "p95": 4539.999999999904,
+    "backlog": 199,
+    "oldestAge": 4.129999999999912,
+    "latest": {
+      "time": 14.999999999999725,
+      "demand": 160,
+      "admitted": 40,
+      "completed": 48,
+      "rejected": 0,
+      "throttled": 120,
+      "backlog": 199,
+      "p95": 4539.999999999904
+    },
+    "nodes": [
+      {
+        "id": "source",
+        "ready": 0,
+        "active": 0,
+        "unacked": 0,
+        "received": 2400,
+        "sent": 958,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "lb",
+        "ready": 12,
+        "active": 0,
+        "unacked": 0,
+        "received": 958,
+        "sent": 946,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "api",
+        "ready": 60,
+        "active": 10,
+        "unacked": 0,
+        "received": 946,
+        "sent": 876,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "queue",
+        "ready": 120,
+        "active": 0,
+        "unacked": 12,
+        "received": 876,
+        "sent": 756,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "worker",
+        "ready": 7,
+        "active": 4,
+        "unacked": 0,
+        "received": 756,
+        "sent": 745,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "db",
+        "ready": 0,
+        "active": 1,
+        "unacked": 0,
+        "received": 745,
+        "sent": 744,
+        "reads": 476,
+        "writes": 268
+      }
+    ]
+  },
+  {
+    "id": "reads",
+    "totals": {
+      "demand": 4200,
+      "admitted": 1738,
+      "completed": 1319,
+      "rejected": 0,
+      "dropped": 0,
+      "throttled": 2462,
+      "reads": 1179,
+      "writes": 140,
+      "committedWrites": 140
+    },
+    "p95": 5419.9999999998845,
+    "backlog": 297,
+    "oldestAge": 5.359999999999886,
+    "latest": {
+      "time": 14.999999999999725,
+      "demand": 280,
+      "admitted": 90,
+      "completed": 89,
+      "rejected": 0,
+      "throttled": 190,
+      "backlog": 297,
+      "p95": 5419.9999999998845
+    },
+    "nodes": [
+      {
+        "id": "source",
+        "ready": 0,
+        "active": 0,
+        "unacked": 0,
+        "received": 4200,
+        "sent": 1738,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "lb",
+        "ready": 40,
+        "active": 0,
+        "unacked": 0,
+        "received": 1738,
+        "sent": 1698,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "api",
+        "ready": 79,
+        "active": 20,
+        "unacked": 0,
+        "received": 1698,
+        "sent": 1599,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "cache",
+        "ready": 79,
+        "active": 100,
+        "unacked": 0,
+        "received": 1599,
+        "sent": 1420,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "db",
+        "ready": 99,
+        "active": 2,
+        "unacked": 0,
+        "received": 1289,
+        "sent": 1188,
+        "reads": 1048,
+        "writes": 140
+      }
+    ]
+  },
+  {
+    "id": "balance",
+    "totals": {
+      "demand": 3600,
+      "admitted": 3600,
+      "completed": 3504,
+      "rejected": 0,
+      "dropped": 0,
+      "throttled": 0,
+      "reads": 2108,
+      "writes": 1396,
+      "committedWrites": 1396
+    },
+    "p95": 2119.999999999955,
+    "backlog": 83,
+    "oldestAge": 2.0799999999999557,
+    "latest": {
+      "time": 14.999999999999725,
+      "demand": 240,
+      "admitted": 240,
+      "completed": 240,
+      "rejected": 0,
+      "throttled": 0,
+      "backlog": 83,
+      "p95": 2119.999999999955
+    },
+    "nodes": [
+      {
+        "id": "source",
+        "ready": 0,
+        "active": 0,
+        "unacked": 0,
+        "received": 3600,
+        "sent": 3600,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "lb",
+        "ready": 3,
+        "active": 0,
+        "unacked": 0,
+        "received": 3600,
+        "sent": 3597,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "fast",
+        "ready": 0,
+        "active": 5,
+        "unacked": 0,
+        "received": 2917,
+        "sent": 2912,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "slow",
+        "ready": 80,
+        "active": 4,
+        "unacked": 0,
+        "received": 680,
+        "sent": 596,
+        "reads": 0,
+        "writes": 0
+      },
+      {
+        "id": "db",
+        "ready": 0,
+        "active": 4,
+        "unacked": 0,
+        "received": 3508,
+        "sent": 3504,
+        "reads": 2108,
+        "writes": 1396
+      }
+    ]
+  }
+]

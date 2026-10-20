@@ -1,8 +1,8 @@
 # FlowLab · System Design Playground
 
-An interactive TypeScript learning game for understanding queues, application load balancers, backpressure, read/write capacity, caches, and replicas. Build a directed architecture, generate requests, change parameters while it runs, and watch the bottleneck move.
+An interactive React + TypeScript learning game for understanding queues, application load balancers, backpressure, read/write capacity, caches, and replicas. Build a directed architecture, generate requests, change parameters while it runs, and watch the bottleneck move.
 
-The interface is in Spanish, with common infrastructure terms in English. All traffic is simulated locally in the browser. No real infrastructure is provisioned or load-tested.
+The interface supports Spanish and English through typed i18next catalogs. The language picker updates controls, missions, help, validation errors, events, metadata, and number formatting without resetting the running simulation. Architecture names and component labels are user content and retain their saved text. All traffic is simulated locally in the browser. No real infrastructure is provisioned or load-tested.
 
 ## Run locally
 
@@ -16,8 +16,13 @@ npm run dev
 Open the URL printed by Vite (default `http://127.0.0.1:5173`).
 
 ```sh
-npm test       # deterministic simulation invariants
-npm run build # strict TypeScript check + production build
+npm run check        # types, lint, format, tests, and production build
+npm test             # simulation, POC compatibility, persistence, controller, i18n
+npm run typecheck    # includes negative type-contract fixtures
+npm run lint         # ESLint with type information + React hooks
+npm run format       # apply Prettier
+npm run format:check # verify formatting
+npm run build        # strict TypeScript check + production build
 ```
 
 The production output in `dist/` is a static website. Serve it with any static HTTP server. The optional Sites deployment identity lives in `.openai/hosting.json`; it contains no credentials.
@@ -69,12 +74,31 @@ Token bucket permits accumulated bursts; leaky bucket paces output. Both shape q
 ## Source layout
 
 ```text
-src/simulation.ts           Typed, deterministic simulation engine
-src/presets.ts              Scenarios and learning objectives
-src/main.ts                 Architecture editor, controls, metrics, chart, persistence
-src/style.css              Responsive application UI
-tests/simulation.test.ts   Behavioral and conservation tests
+src/main.tsx                 React entrypoint and i18n provider
+src/App.tsx                  App lifecycle, toolbar, library, file controls
+src/components/              Canvas, inspector, dashboard, guides, SVG icons
+src/playground.ts            Typed controller; React subscribes to revisions
+src/simulation.ts            Deterministic engine; independent of React and i18n
+src/messages.ts              Structured validation and event messages
+src/persistence.ts           Validated JSON boundary; compatible with POC v1 saves
+src/i18n/                    es/en catalogs, i18next type augmentation, messages
+src/presets.ts               Scenario definitions and localized creation
+src/style.css                Responsive application UI
+tests/                       Behavioral, compatibility, locale, and type contracts
+.github/workflows/check.yml  CI runs the same npm run check command
 ```
+
+## Types and code style
+
+TypeScript uses strict mode, explicit function return types, type-only imports, and discriminated unions for configuration controls and events. ESLint uses the typescript-eslint recommended type-checked rules plus React hook rules; explicit `any`, unsafe operations, floating promises, and missing cases are errors. Typechecking includes tests. Run checks with Node.js 24 (the CI version); Node 22.19+ also supports the test runner.
+
+Prettier follows [Google TypeScript style](https://github.com/google/gts/blob/main/.prettierrc.json), with a 100-column limit: two spaces, single quotes, semicolons, and trailing commas. The small preset is copied directly into `.prettierrc.mjs` to avoid pulling in the unrelated GTS toolchain. `.editorconfig` and optional VS Code settings keep formatting consistent.
+
+Every locale must satisfy the complete catalog type. i18next module augmentation checks keys and interpolation types; `tests/i18n.types.ts` asserts invalid usage fails compilation. Runtime tests verify locale keys and interpolation placeholders match. Add texts in `src/i18n/es.ts`, then supply the corresponding English entry. Do not put translated markup or HTML strings in components; React renders text safely.
+
+Browser saves retain `system-design-flow-v1`, `version: 1`, and the original JSON fields. The language preference has its own storage key. Importing a design never renames custom labels. Existing events store structured data and translate at render time, so changing language does not require recreating the engine.
+
+A baseline captured from POC commit `e7d1a8d` checks the exact 15-second outcomes of all three missions, including totals, p95, backlog, oldest request, and per-node work. The original 13 simulation invariant tests are retained. The POC remains in the parent branch `u/miguel.chan/architecture-playground`; this iteration is `u/miguel.chan/react-i18n`.
 
 ## References
 
