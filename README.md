@@ -34,7 +34,11 @@ The production output in `dist/` is a static website. Serve it with any static H
 3. **Repartir el trabajo:** compare round robin with least loaded across uneven application instances; take one destination offline and recover it.
 4. **Lienzo libre:** add, connect, move, configure, and remove components. Export/import architectures as JSON. Your current architecture is saved to browser local storage.
 
-Click an output port and then an input port to connect nodes. Click a connection to remove it. Drag the background to pan; Ctrl/Command + scroll zooms. Capacity changes apply live. Structural changes reset the simulation to preserve metric accounting.
+Click an output port and then an input port to connect nodes. Select a component or connection, then use Delete, Backspace, the toolbar trash button, or the inspector delete control. Keyboard deletion works outside the canvas too; it never intercepts text/number/select editing, IME composition, modified shortcuts, or an open guide. Deleting a component also removes its attached connections. Structural changes reset the simulation to preserve metric accounting; capacity changes apply live.
+
+The Components and Inspector buttons toggle independently collapsible desktop docks. At widths up to 900 px, both start closed and open as one modal drawer at a time. Close them with the pinned X, Escape, or a tap on the backdrop. Settings survive closing/reopening; adding a component closes the mobile library and places the new component on the canvas. Tapping a node opens its inspector; dragging it does not.
+
+On touchscreens, drag the background to pan and use two fingers to zoom around their moving midpoint. On desktop, use Ctrl/Command + scroll. Zoom buttons and fit-to-canvas are available in both layouts. Metrics and controls wrap for phone widths starting at 320 px, while drawer controls remain scrollable with a fixed close button.
 
 ## Components and controls
 
@@ -78,6 +82,9 @@ src/main.tsx                 React entrypoint and i18n provider
 src/App.tsx                  App lifecycle, toolbar, library, file controls
 src/components/              Canvas, inspector, dashboard, guides, SVG icons
 src/playground.ts            Typed controller; React subscribes to revisions
+src/keyboard.ts              Safe selection deletion shortcuts
+src/viewport.ts              Typed pinch geometry and zoom bounds
+src/useCompactLayout.ts      Responsive drawer breakpoint subscription
 src/simulation.ts            Deterministic engine; independent of React and i18n
 src/messages.ts              Structured validation and event messages
 src/persistence.ts           Validated JSON boundary; compatible with POC v1 saves
@@ -98,7 +105,7 @@ Every locale must satisfy the complete catalog type. i18next module augmentation
 
 Browser saves retain `system-design-flow-v1`, `version: 1`, and the original JSON fields. The language preference has its own storage key. Importing a design never renames custom labels. Existing events store structured data and translate at render time, so changing language does not require recreating the engine.
 
-A baseline captured from POC commit `e7d1a8d` checks the exact 15-second outcomes of all three missions, including totals, p95, backlog, oldest request, and per-node work. The original 13 simulation invariant tests are retained. The POC remains in the parent branch `u/miguel.chan/architecture-playground`; this iteration is `u/miguel.chan/react-i18n`.
+A baseline captured from POC commit `e7d1a8d` checks the exact 15-second outcomes of all three missions, including totals, p95, backlog, oldest request, and per-node work. The original 13 simulation invariant tests are retained. The suite now has 28 tests, including selection deletion, shortcut guards, and pinch geometry. The POC remains in the parent branch `u/miguel.chan/architecture-playground`; this iteration is `u/miguel.chan/react-i18n`.
 
 ## References
 

@@ -212,6 +212,15 @@ export class Playground {
     this.selectedEdge = null;
     this.topologyChanged();
   }
+  clearSelection(): void {
+    this.selected = null;
+    this.selectedEdge = null;
+    this.notify();
+  }
+  deleteSelection(): void {
+    if (this.selectedEdge) this.deleteEdge();
+    else if (this.selected) this.deleteNode(this.selected);
+  }
   deleteEdge(): void {
     if (!this.selectedEdge) return;
     this.design.edges = this.design.edges.filter((edge) => edge.id !== this.selectedEdge);

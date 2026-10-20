@@ -320,11 +320,7 @@ export function Inspector({store}: {store: Playground}): JSX.Element {
   const node = store.design.nodes.find((node) => node.id === store.selected);
   if (edge)
     return (
-      <aside className="inspector">
-        <div className="inspector-title">
-          <span className="eyebrow">{t('connection')}</span>
-          <Icon name="arrow" />
-        </div>
+      <>
         <div className="inspector-body">
           <h2>{t('trafficRoute')}</h2>
           <p className="inspector-description">
@@ -337,20 +333,16 @@ export function Inspector({store}: {store: Playground}): JSX.Element {
           </button>
           <p className="field-note">{t('topologyNote')}</p>
         </div>
-      </aside>
+      </>
     );
   if (!node)
     return (
-      <aside className="inspector">
-        <div className="inspector-title">
-          <span className="eyebrow">{t('inspector')}</span>
-          <Icon name="service" />
-        </div>
+      <>
         <div className="inspector-body empty-inspector">
           <h2>{t('makeItYours')}</h2>
           <p>{t('selectComponent')}</p>
         </div>
-      </aside>
+      </>
     );
   const state = store.simulation.states.get(node.id)!;
   const metrics: [number, TranslationKey][] =
@@ -372,11 +364,7 @@ export function Inspector({store}: {store: Playground}): JSX.Element {
             [node.kind === 'queue' ? state.unacked.size : state.active.length, 'inFlight'],
           ];
   return (
-    <aside className="inspector">
-      <div className="inspector-title">
-        <span className="eyebrow">{t('configuration')}</span>
-        <span className="edit-live">{t('live')}</span>
-      </div>
+    <>
       <div className="inspector-body">
         <div className={`inspector-node type-${node.kind}`}>
           <span className="library-icon">
@@ -434,6 +422,6 @@ export function Inspector({store}: {store: Playground}): JSX.Element {
           </button>
         </div>
       </div>
-    </aside>
+    </>
   );
 }

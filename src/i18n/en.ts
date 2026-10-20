@@ -58,7 +58,7 @@ export const en = {
   noInfra: 'No real services. No infrastructure costs.',
   github: 'Code on GitHub ↗',
   architecture: 'Architecture',
-  canvasSubtitle: 'Select a component to experiment',
+  canvasSubtitle: 'Tap a component to configure it',
   zoomOut: 'Zoom out',
   zoomIn: 'Zoom in',
   fit: 'Fit architecture to canvas',
@@ -233,7 +233,7 @@ export const en = {
   helpColors:
     'Green = read · violet = write · amber = backpressure. Dots sample traffic; they are not an exact request count.',
   helpKeys:
-    'Drag components or the background. Use Space to start/pause while the canvas has focus; Delete removes the selected connection.',
+    'Drag components or the background. Use Space to start/pause from the canvas; Delete or Backspace removes the selection, except while editing a field. On mobile, use two fingers to zoom and the panel buttons to open or close components and inspector.',
   hintTitle: 'A hint, not the answer.',
   hintCallout: 'Change a variable. Observe. Form a hypothesis. Repeat.',
   assumptionsTitle: 'A model to reason with.',
@@ -293,4 +293,11 @@ export const en = {
   sourceOutputOnly: 'A generator only has an output.',
   missingNode: 'A connection points to a missing component.',
   cycle: 'Flow must move forward: remove the cycle between components.',
+  closeComponents: 'Close components',
+  closeInspector: 'Close inspector',
+  showComponents: 'Components',
+  showInspector: 'Inspector',
+  deleteSelection: 'Delete selection',
+  selectionHelp: 'Select a component or connection to edit or delete.',
+  touchTip: 'Drag to pan · Use two fingers to zoom',
 } as const satisfies Catalog;
